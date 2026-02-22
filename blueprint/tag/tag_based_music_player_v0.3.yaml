@@ -1,0 +1,115 @@
+blueprint:
+  name: NFC Spotify Playlist Player with Shuffle, Grouping, and Skip
+  description: >
+    Plays a Spotify playlist when a tag is scanned.
+    Pauses playback when the corresponding "_<tag_id>" tag is scanned.
+    Adds options to shuffle the playlist, join multiple speakers into a single group,
+    and skip the first song so playback starts on a random track.
+  domain: automation
+  input:
+    placed_tag_id:
+      name: Placed Tag ID
+      description: >
+        The ID of the physical NFC tag that starts playback.
+        Enter it exactly as shown in Settings → Tags.
+        Do NOT include the leading underscore.
+        Example: 7B-C3-72-0D
+      selector:
+        text:
+
+    spotify_playlist_uri:
+      name: Spotify Playlist URI
+      description: >
+        The full Spotify playlist URI.
+        Format: spotify:playlist:xxxxxxxxxxxxxxxxxxxx
+        You can copy this from Spotify (Share → Copy Spotify URI).
+      selector:
+        text:
+
+    target_speakers:
+      name: Target Media Players
+      description: >
+        One or more Spotify-capable media_player entities
+        where the playlist should be played.
+      selector:
+        entity:
+          domain: media_player
+          multiple: true
+
+    shuffle_playlist:
+      name: Shuffle Playlist
+      description: >
+        If enabled, the playlist will be shuffled so the first song is random.
+      default: true
+      selector:
+        boolean:
+
+mode: single
+
+triggers:
+  - trigger: event
+    event_type: tag_scanned
+
+variables:
+  placed_tag: !input placed_tag_id
+  removed_tag: "{{ '_' ~ placed_tag }}"
+  playlist_uri: !input spotify_playlist_uri
+  shuffle: !input shuffle_playlist
+  players: !input target_speakers
+
+conditions: []
+
+actions:
+  - choose:
+      # ▶️ Play playlist
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.data.tag_id == placed_tag }}
+        sequence:
+          # Join multiple speakers into a single group if needed
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ players | length > 1 }}"
+                sequence:
+                  - service: media_player.join
+                    target:
+                      entity_id: "{{ players[0] }}"
+                    data:
+                      group_members: "{{ players[1:] }}"
+
+          # Enable shuffle if requested
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ shuffle }}"
+                sequence:
+                  - action: media_player.shuffle_set
+                    target:
+                      entity_id: "{{ players[0] }}"
+                    data:
+                      shuffle: true
+
+          # Play the playlist on the master player
+          - action: media_player.play_media
+            target:
+              entity_id: "{{ players[0] }}"
+            data:
+              media_content_id: "{{ playlist_uri }}"
+              media_content_type: playlist
+
+          # Skip the first song
+          - action: media_player.media_next_track
+            target:
+              entity_id: "{{ players[0] }}"
+
+      # ⏸ Pause playback
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.data.tag_id == removed_tag }}
+        sequence:
+          - action: media_player.media_pause
+            target:
+              entity_id: !input target_speakers
