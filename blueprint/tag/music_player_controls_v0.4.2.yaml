@@ -1,0 +1,82 @@
+blueprint:
+  name: ESPHome RFID Media Buttons Controller
+  description: >
+    Controls media players using button events sent from an ESPHome device.
+    The ESPHome device sends events of type `esphome.rfid_media_button`
+    containing:
+      - device (ESPHome device name)
+      - button
+      - action
+
+    The automation filters events based on the configured device name
+    and then performs media actions on the configured speaker group.
+
+  domain: automation
+
+  input:
+    device_name:
+      name: ESPHome Device Name
+      description: >
+        The name of the ESPHome device sending button events.
+        Must match the `device` field in the event payload.
+      selector:
+        text:
+
+    target_speakers:
+      name: Target Media Players
+      description: >
+        One or more media_player entities to control.
+        The first entity will be used as the group master.
+      selector:
+        entity:
+          domain: media_player
+          multiple: true
+
+mode: queued
+max: 10
+
+trigger:
+  - platform: event
+    event_type: esphome.rfid_media_button
+
+variables:
+  device_name: !input device_name
+  players: !input target_speakers
+  action: "{{ trigger.event.data.action }}"
+  device: "{{ trigger.event.data.device }}"
+
+condition:
+  - condition: template
+    value_template: "{{ device == device_name }}"
+
+action:
+  - choose:
+      - conditions: "{{ action == 'previous' }}"
+        sequence:
+          - service: media_player.media_previous_track
+            target:
+              entity_id: "{{ players[0] }}"
+
+      - conditions: "{{ action == 'next' }}"
+        sequence:
+          - service: media_player.media_next_track
+            target:
+              entity_id: "{{ players[0] }}"
+
+      - conditions: "{{ action == 'play_pause' }}"
+        sequence:
+          - service: media_player.media_play_pause
+            target:
+              entity_id: "{{ players[0] }}"
+
+      - conditions: "{{ action == 'volume_up' }}"
+        sequence:
+          - service: media_player.volume_up
+            target:
+              entity_id: "{{ players[0] }}"
+
+      - conditions: "{{ action == 'volume_down' }}"
+        sequence:
+          - service: media_player.volume_down
+            target:
+              entity_id: "{{ players[0] }}"

@@ -99,11 +99,6 @@ actions:
               media_content_id: "{{ playlist_uri }}"
               media_content_type: playlist
 
-          # Skip the first song
-          - action: media_player.media_next_track
-            target:
-              entity_id: "{{ players[0] }}"
-
       # ⏸ Pause playback
       - conditions:
           - condition: template
